@@ -1,0 +1,28 @@
+{
+    "name": "John Doe",
+    "age": 30,
+    "city": "New York",
+    "contact": {
+        "email": "john.doe@starfleet.org",
+        "phone": "555-0123",
+        "address": {
+            "street": "123 Main St",
+            "zip": "10001",
+            "country": "United States"
+        }
+    },
+    "assignments": [
+        {
+            "ship": "USS Enterprise",
+            "role": "Science Officer",
+            "startDate": "2360-03-15"
+        },
+        {
+            "ship": "USS Voyager", 
+            "role": "Chief Medical Officer",
+            "startDate": "2371-01-20"
+        }
+    ],
+    "skills": ["xenobiology", "astrophysics", "medical research"],
+    "certifications": ["Starfleet Medical", "Advanced Xenoscience"]
+}
