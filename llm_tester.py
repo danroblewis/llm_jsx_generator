@@ -190,11 +190,14 @@ Generate a JSX template to render the following JSON data:
 Only return the JSX template. Do not include the React component or javascript. Just the JSX template.
 Do not include any <script> or <style> tags. 
 Assume the the JSON is passed as a paramter called `props`. For example, if you have {{ "name": "Joe" }}, you should use `props.name` in the JSX template.
-Use inline styles to make the UI look like a LCARS interface from the Star Trek The Next Generation. 
 Consider using cards, flexboxes, tables, lists, and other css properties to make it look really cool.
+
+Use inline styles to make the UI look like a LCARS interface from the Star Trek The Next Generation. 
+Always render groups of numbers as progress bars and gauges.
 Try to include all of the information from the JSON in the JSX template. We don't want to lose information.
 Never use `JSON.stringify` in the JSX template. Do not use `JSON.stringify`. Don't use `JSON.stringify`.
 """
+    # Use inline styles to make the UI look very classy and modern. 
     jsx_template = None
     for i in range(20):
         res = llm.invoke(prompt).content

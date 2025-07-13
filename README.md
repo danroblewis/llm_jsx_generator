@@ -48,3 +48,18 @@ Design stuff
     - the two bars should have different thicknesses
     - if a swept connects to another swept, the thicknesses that meet should have  different thickness
 
+
+
+
+
+this is all working pretty well
+i should make a new react hook
+```js
+function MyComponent(props) {
+    const [ Template ] = useLLMJSX("some guidance", [props])
+
+    return <Template {...props} />
+}
+
+
+```
