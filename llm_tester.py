@@ -181,20 +181,28 @@ def json_to_lcars_html(json_data: any, llm: any) -> str:
 
 def json_to_lcars_jsx(json_data: any, llm: any) -> str:
     prompt = f"""
-    Generate a JSX template to render the following JSON data:
-    {json.dumps(json_data, indent=2)}
+Generate a JSX template to render the following JSON data:
 
-    Only return the JSX template. Do not include the React component or javascript. Just the JSX template.
-    Do not include any <script> or <style> tags. 
-    Assume the the JSON is passed as a paramter called `props`. For example, if you have {{ "name": "Joe" }}, you should use `props.name` in the JSX template.
-    Use inline styles to make the UI look like a LCARS interface from the Star Trek The Next Generation. 
-    Consider using cards, flexboxes, tables, lists, and other css properties to make it look really cool.
-    """
+```json
+{json.dumps(json_data, indent=2)}
+```
+
+Only return the JSX template. Do not include the React component or javascript. Just the JSX template.
+Do not include any <script> or <style> tags. 
+Assume the the JSON is passed as a paramter called `props`. For example, if you have {{ "name": "Joe" }}, you should use `props.name` in the JSX template.
+Use inline styles to make the UI look like a LCARS interface from the Star Trek The Next Generation. 
+Consider using cards, flexboxes, tables, lists, and other css properties to make it look really cool.
+Try to include all of the information from the JSON in the JSX template. We don't want to lose information.
+Never use `JSON.stringify` in the JSX template. Do not use `JSON.stringify`. Don't use `JSON.stringify`.
+"""
     jsx_template = None
     for i in range(20):
         res = llm.invoke(prompt).content
         if '<style' in res:
             print('llm gave us a style tag, skipping')
+            continue
+        if 'JSON.stringify' in res:
+            print('llm gave us a JSON.stringify, skipping')
             continue
         try:
             jsx_template = extract_markdown_block(res, "jsx")
@@ -228,9 +236,9 @@ def json_to_lcars_jsx(json_data: any, llm: any) -> str:
 
 def random_json(llm: any) -> any:
     prompt = """
-    Generate a JSON object based on an arbitrary topic.
-    Make it themed on Star Trek The Next Generation.
-    """
+Generate a JSON object based on an arbitrary topic.
+Make it themed on Star Trek The Next Generation.
+"""
     for i in range(10):
         print(f"Generating JSON {i}")
         res = llm.invoke(prompt).content
@@ -249,7 +257,7 @@ def random_json(llm: any) -> any:
 def reorganize_json(json_data: any, llm: any) -> any:
     prompt = f"""
 Reorganize the following JSON data into a more logical structure. 
-Try to make the JSON small enough that a visual representation of it would fit on one to three pages if turned into a web page.
+If the JSON is long, reorganize it to shorten it. 
 
 ```json
 {json.dumps(json_data, indent=2)}

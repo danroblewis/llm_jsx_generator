@@ -104,23 +104,50 @@
             return <div>{Comp}</div>;
         }
 
-
         function App() {
             const [jsonData, setJsonData] = React.useState('');
             const [template, setTemplate] = React.useState(null);
             const [shouldReorganize, setShouldReorganize] = React.useState(false);
             
-            // // Fetch initial data
-            // useEffect(() => {
-            //     fetch('/random_json')
-            //         .then(response => response.json())
-            //         .then(data => {
-            //             setJsonData(JSON.stringify(data, null, 2));
-            //         })
-            // }, []);
+            // Fetch initial data and set up timer if URL exists
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const url = urlParams.get('url');
+                
+                const fetchData = async () => {
+                    const endpoint = url ? `/random_json?url=${encodeURIComponent(url)}` : '/random_json';
+                    const response = await fetch(endpoint);
+                    let data = await response.json();
+                    if (Array.isArray(data)) {
+                        data = { data };
+                    }
+                    setJsonData(JSON.stringify(data, null, 2));
+                };
+
+                fetchData();
+
+                // Set up timer only if URL exists
+                let interval;
+                if (url) {
+                    interval = setInterval(fetchData, 10000);
+                }
+
+                return () => {
+                    if (interval) {
+                        clearInterval(interval);
+                    }
+                };
+            }, []);
+
+            // Generate template only on first render when jsonData is populated
+            useEffect(() => {
+                if (jsonData && !template) {
+                    handleSubmit();
+                }
+            }, [jsonData]);
 
             const handleSubmit = async () => {
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i < 20; i++) {
                     try {
                         let data = JSON.parse(jsonData);
                         
@@ -177,7 +204,6 @@
                     console.error('Error parsing JSON data:', error);
                 }
             }
-
 
             let LCARSTemplate = new Function('React', `return ${template}`)(React);
 
@@ -237,22 +263,6 @@
         }
 
 
-        // function App() {
-        //     const props = { name: 'John Doe' };
-        //     const jsxString = `<div><h1>Hello, {props.name}</h1></div>`;
-            
-        //     const code = Babel.transform(
-        //         `(function(props){ return (${jsxString}); })`,
-        //         { presets: ['react'] }
-        //     ).code;
-        //     const MyThing = new Function('React', `return ${code}`)(React);
-
-        //     return <div>
-        //         <h1>before test</h1>
-        //         <MyThing {...props} />
-        //         <h1>after test</h1>
-        //     </div>;
-        // }
 
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
