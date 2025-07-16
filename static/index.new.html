@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCARS Interface</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="/static/babel.min.js"></script>
+
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" /> -->
+    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/darkly/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer ></script>
+    <script src="/static/babel-transform-optional-chaining.js"></script>
+
+    <link rel="stylesheet" href="/static/lcars.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #f4bf3a;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        Babel.registerPlugin(
+            "transform-optional-chaining",
+            window.babelPluginTransformOptionalChaining
+        );
+
+
+
+        const { useState, useEffect, useMemo } = React;
+
+        function LLMTemplate(props) {
+            const MAX_RETRIES = 30;
+            const [retryCount, setRetryCount] = React.useState(MAX_RETRIES);
+            const [isGenerating, setIsGenerating] = React.useState(false);
+            const [InternalTemplate, setInternalTemplate] = React.useState(null);
+            const [isHovered, setIsHovered] = React.useState(false);
+
+            const get_tsx_template = async () => {
+                try {
+                    const response = await fetch('/get_jsx_template?regenerate=' + (retryCount < MAX_RETRIES), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', },
+                        body: JSON.stringify(props)
+                    });
+                    const jsx_text = await response.text();
+
+                    try {
+                        let code = Babel.transform(
+                            `(function(props){ return (${jsx_text}); })`,
+                            { presets: ['react'], plugins: ['transform-optional-chaining'] }
+                        ).code;
+                        let tmp_tpl = new Function('React', `return ${code}`)(React);
+                        tmp_tpl(props);  // this tests the template
+                        return tmp_tpl;
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } catch (error) {}
+
+                return false;
+            };
+
+            const handleRegenerate = () => {
+                setRetryCount(MAX_RETRIES-1);
+            };
+
+            // Generate template only on first render when jsonData is populated
+            useEffect(async () => { 
+                if (retryCount == 0 || isGenerating || !props || Object.keys(props).length === 0) {
+                    return
+                }
+                setIsGenerating(true);
+                let tmp_tpl = await get_tsx_template();
+                if (tmp_tpl) {
+                    setInternalTemplate(() => tmp_tpl);
+                    setRetryCount(0);
+                } else {
+                    setRetryCount(retryCount - 1);
+                }
+                setIsGenerating(false);
+            }, [props, retryCount, isGenerating]);
+
+            if (!InternalTemplate) {
+                return <div>Loading...</div>;
+            }
+
+            return (
+                <div 
+                    style={{ position: 'relative' }}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <div style={{ 
+                        opacity: isGenerating ? 0.5 : 1,
+                        transition: 'opacity 0.2s'
+                    }}>
+                        <InternalTemplate {...props} />
+                    </div>
+                    <button
+                        className="btn btn-sm btn-outline-warning"
+                        onClick={handleRegenerate}
+                        style={{
+                            position: 'absolute',
+                            bottom: '0',
+                            right: '0',
+                            opacity: isHovered ? 1 : 0,
+                            transition: 'opacity 0.2s',
+                            zIndex: 1000
+                        }}
+                    >
+                        ↻
+                    </button>
+                </div>
+            );
+        }
+
+
+
+
+        function App() {
+            const [ jsonData, setJsonData ] = useState(null);
+            const [ url, setUrl ] = useState('http://localhost:8006/random_json');
+            const [ kubectlCommand, setKubectlCommand ] = useState('get events');
+            const [ useKubectl, setUseKubectl ] = useState(false);
+            
+            useEffect(() => {
+                const INTERVAL = 2000;
+                let intervalId = null;
+
+                const fetchData = () => {
+                    const fetchUrl = useKubectl 
+                        ? `/kubectl_json?command=${encodeURIComponent(kubectlCommand)}`
+                        : `/proxy?url=${encodeURIComponent(url)}`;
+
+                    fetch(fetchUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            if ('error' in data) {   
+                                console.error(data.error);
+                            } else {
+                                setJsonData(data);
+                            }
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        })
+                        .catch(error => { 
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        });
+                };
+
+                fetchData();
+
+                return () => {
+                    if (intervalId) {
+                        clearTimeout(intervalId);
+                    }
+                };
+            }, [url, kubectlCommand, useKubectl]);
+
+            return (
+                <div>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            URL:
+                        </label>
+                        <input 
+                            type="text"
+                            defaultValue={url}
+                            onBlur={(e) => setUrl(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '8px',
+                                backgroundColor: '#333',
+                                color: '#f4bf3a',
+                                border: '1px solid #f4bf3a',
+                                borderRadius: '4px',
+                                opacity: useKubectl ? 0.5 : 1
+                            }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            kubectl Command:
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <input 
+                                type="text"
+                                defaultValue={kubectlCommand}
+                                onBlur={(e) => setKubectlCommand(e.target.value)}
+                                style={{
+                                    flex: 1,
+                                    padding: '8px',
+                                    backgroundColor: '#333',
+                                    color: '#f4bf3a',
+                                    border: '1px solid #f4bf3a',
+                                    borderRadius: '4px',
+                                    opacity: !useKubectl ? 0.5 : 1
+                                }}
+                            />
+                            <label style={{ color: '#f4bf3a' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useKubectl}
+                                    onChange={(e) => setUseKubectl(e.target.checked)}
+                                /> Use kubectl
+                            </label>
+                        </div>
+                    </div>
+
+                    <LLMTemplate {...jsonData} />
+                </div>
+            );
+        }
+
+
+        // function App() {
+        //     const [nodesData, setNodesData] = useState(null);
+        //     const [podsData, setPodsData] = useState(null);
+        //     const [eventsData, setEventsData] = useState(null);
+
+        //     useEffect(() => {
+        //         // Function to fetch data for a specific kubectl command
+        //         const fetchKubectlData = async (command) => {
+        //             try {
+        //                 const response = await fetch(`/kubectl_json?command=${encodeURIComponent(command)}`);
+        //                 const data = await response.json();
+        //                 return data;
+        //             } catch (error) {
+        //                 console.error(`Error fetching ${command}:`, error);
+        //                 return null;
+        //             }
+        //         };
+
+        //         // Function to update all data
+        //         const updateData = async () => {
+        //             const nodes = await fetchKubectlData('get nodes');
+        //             const pods = await fetchKubectlData('get pods');
+        //             const events = await fetchKubectlData('get events');
+
+        //             setNodesData(nodes);
+        //             setPodsData(pods);
+        //             setEventsData(events);
+        //         };
+
+        //         // Initial fetch
+        //         updateData();
+
+        //         // Set up interval for periodic updates
+        //         const interval = setInterval(updateData, 10000);
+
+        //         // Cleanup interval on unmount
+        //         return () => clearInterval(interval);
+        //     }, []);
+
+        //     return (
+        //         <div style={{
+        //             padding: '20px',
+        //             backgroundColor: '#1a1a1a',
+        //             minHeight: '100vh',
+        //             color: '#f4bf3a'
+        //         }}>
+        //             <h1 style={{
+        //                 color: '#f4bf3a',
+        //                 marginBottom: '20px',
+        //                 fontSize: '24px'
+        //             }}>Kubernetes Cluster Overview</h1>
+
+        //             <div style={{
+        //                 display: 'grid',
+        //                 gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        //                 gap: '20px'
+        //             }}>
+        //                 <div style={{
+        //                     backgroundColor: '#2a2a2a',
+        //                     padding: '15px',
+        //                     borderRadius: '8px',
+        //                     border: '1px solid #f4bf3a'
+        //                 }}>
+        //                     <h2 style={{ marginBottom: '10px', fontSize: '18px' }}>Nodes</h2>
+        //                     {nodesData ? <LLMTemplate {...nodesData} /> : <div>Loading nodes...</div>}
+        //                 </div>
+
+        //                 <div style={{
+        //                     backgroundColor: '#2a2a2a',
+        //                     padding: '15px',
+        //                     borderRadius: '8px',
+        //                     border: '1px solid #f4bf3a'
+        //                 }}>
+        //                     <h2 style={{ marginBottom: '10px', fontSize: '18px' }}>Pods</h2>
+        //                     {podsData ? <LLMTemplate {...podsData} /> : <div>Loading pods...</div>}
+        //                 </div>
+
+        //                 <div style={{
+        //                     backgroundColor: '#2a2a2a',
+        //                     padding: '15px',
+        //                     borderRadius: '8px',
+        //                     border: '1px solid #f4bf3a'
+        //                 }}>
+        //                     <h2 style={{ marginBottom: '10px', fontSize: '18px' }}>Events</h2>
+        //                     {eventsData ? <LLMTemplate {...eventsData} /> : <div>Loading events...</div>}
+        //                 </div>
+        //             </div>
+        //         </div>
+        //     );
+        // }
+
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

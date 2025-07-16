@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCARS Interface</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="/static/babel.min.js"></script>
+    <link rel="stylesheet" href="/static/lcars.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #f4bf3a;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+
+        function LLMTemplate(props) {
+            const [template, setTemplate] = React.useState(null);
+
+            // Generate template only on first render when jsonData is populated
+            useEffect(() => { get_tsx_template(); }, [props]);
+
+            const compile_tsx_template = (jsx_text) => {
+                let code = Babel.transform(
+                    `(function(props){ return (${jsx_text}); })`,
+                    { presets: ['react'] }
+                ).code;
+                return new Function('React', `return ${code}`)(React);
+            }
+
+            const test_tsx_template = (jsx_template, _props) => {
+                if (!jsx_template) {
+                    return false;
+                }
+                try {
+                    compile_tsx_template(jsx_template)(_props);
+                    return true;
+                } catch (error) {
+                    console.log('Error:', error);
+                    return false;
+                }
+            }
+
+            const get_tsx_template = async () => {
+                var last_err = null;
+                for (let i = 0; i < 20; i++) {
+                    try {
+                        let data = props;
+
+                        // Generate a new template
+                        const response = await fetch('/get_jsx_template?regenerate=' + (i > 0), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', },
+                            body: JSON.stringify(props)
+                        });
+                        let jsx_text = await response.text();
+
+                        // Test the template
+                        if (test_tsx_template(jsx_text, props)) {
+                            return setTemplate(jsx_text);
+                        }
+                    } catch (error) {
+                        last_err = error;
+                    }
+                }
+                console.error("Failed to generate a template, last template error:", last_err);
+            };
+
+
+            let InternalGeneratedTemplate_ = () => <div>Loading...</div>
+            if (props && test_tsx_template(template, props)) {
+                InternalGeneratedTemplate_ = compile_tsx_template(template);
+            }
+
+            return <InternalGeneratedTemplate_ {...props} />;
+        }
+
+        function App() {
+            const [ jsonData, setJsonData ] = useState(null);
+            const [ url, setUrl ] = useState('http://api.open-notify.org/iss-now.json');
+            const [ kubectlCommand, setKubectlCommand ] = useState('get pods');
+            const [ useKubectl, setUseKubectl ] = useState(false);
+            
+            useEffect(() => {
+                const INTERVAL = 20000;
+                let intervalId = null;
+
+                const fetchData = () => {
+                    const fetchUrl = useKubectl 
+                        ? `/kubectl_json?command=${encodeURIComponent(kubectlCommand)}`
+                        : `/proxy?url=${encodeURIComponent(url)}`;
+
+                    fetch(fetchUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            setJsonData(data);
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        })
+                        .catch(error => { 
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        });
+                };
+
+                fetchData();
+
+                return () => {
+                    if (intervalId) {
+                        clearTimeout(intervalId);
+                    }
+                };
+            }, [url, kubectlCommand, useKubectl]);
+
+            return (
+                <div>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            URL:
+                        </label>
+                        <input 
+                            type="text"
+                            defaultValue={url}
+                            disabled={useKubectl}
+                            onBlur={(e) => setUrl(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '8px',
+                                backgroundColor: '#333',
+                                color: '#f4bf3a',
+                                border: '1px solid #f4bf3a',
+                                borderRadius: '4px',
+                                opacity: useKubectl ? 0.5 : 1
+                            }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            kubectl Command:
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <input 
+                                type="text"
+                                defaultValue={kubectlCommand}
+                                disabled={!useKubectl}
+                                onBlur={(e) => setKubectlCommand(e.target.value)}
+                                style={{
+                                    flex: 1,
+                                    padding: '8px',
+                                    backgroundColor: '#333',
+                                    color: '#f4bf3a',
+                                    border: '1px solid #f4bf3a',
+                                    borderRadius: '4px',
+                                    opacity: !useKubectl ? 0.5 : 1
+                                }}
+                            />
+                            <label style={{ color: '#f4bf3a' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useKubectl}
+                                    onChange={(e) => setUseKubectl(e.target.checked)}
+                                /> Use kubectl
+                            </label>
+                        </div>
+                    </div>
+
+                    <LLMTemplate {...jsonData} />
+                </div>
+            );
+        }
+
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<div className="lcars-panel" style={{ backgroundColor: '#222', color: '#eee', padding: '1em', borderRadius: '0.5em', width: '100%', fontFamily: 'monospace', fontSize: '0.8em' }}>
+  <h2>LCARS Event Log</h2>
+  <div className="section">
+   <h3>Event List Summary</h3>
+   <p style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Total Events: {props.items && props.items.length}</p>
+   <div className="progress-bar-container">
+    <div className="progress-bar" style={{ width: '80%', backgroundColor: '#4488cc', height: '10px' }} />
+   </div>
+  </div>
+
+  <div className="section">
+   <h3>Recent Events</h3>
+   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <thead>
+     <tr style={{ backgroundColor: '#333' }}>
+       <th style={{ padding: '0.2em', borderRight: '1px solid #444' }}>Timestamp</th>
+       <th style={{ padding: '0.2em', borderRight: '1px solid #444' }}>Type</th>
+       <th style={{ padding: '0.2em', borderRight: '1px solid #444' }}>Reason</th>
+       <th style={{ padding: '0.2em' }}>Message</th>
+     </tr>
+    </thead>
+    <tbody>
+        {props.items && props.items.map((event, index) => (
+            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#111' : '#222' }}>
+                <td style={{ padding: '0.2em', borderRight: '1px solid #444' }}>{event.metadata && event.metadata.creationTimestamp}</td>
+                <td style={{ padding: '0.2em', borderRight: '1px solid #444' }}>{event.type}</td>
+                <td style={{ padding: '0.2em', borderRight: '1px solid #444' }}>{event.reason}</td>
+                <td style={{ padding: '0.2em', textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>{event.message}</td>
+            </tr>
+        ))}
+    </tbody>
+   </table>
+  </div>
+
+  <div className="section">
+   <h3>Resource Version</h3>
+   <p style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>{props.metadata && props.metadata.resourceVersion}</p>
+   <div className="progress-bar-container">
+    <div className="progress-bar" style={{ width: '60%', backgroundColor: '#66b3ff', height: '10px' }} />
+   </div>
+  </div>
+ 
+  <div className="section">
+   <h3>Kind</h3>
+   <p style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>{props.kind}</p>
+  </div>
+   
+</div>

@@ -4,3 +4,4 @@ jinja2
 langchain-openai
 langchain-core
 httpx
+aiohttp

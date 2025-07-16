@@ -63,3 +63,27 @@ function MyComponent(props) {
 
 
 ```
+
+
+
+this went pretty well.
+the LLMTemplate component works.
+i can make components with it now like:
+```js
+function PersonCard() {
+    const somebody = {
+        name: "John Doe",
+        age: 30,
+        city: "New York",
+        email: "john.doe@example.com"
+    }
+    return <LLMTemplate {...somebody} />
+}
+```
+what next?
+- pass in pre-existing styles, design principles, or use tailwind
+- pass in a list of callback functions for it to use in its template
+- pass a description of the type of component it's rendering (card, list, )
+- 
+
+

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCARS Interface</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="/static/babel.min.js"></script>
+    <link rel="stylesheet" href="/static/lcars.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #f4bf3a;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        function LLMTemplate(props) {
+            const [template, setTemplate] = React.useState(null);
+            const [retryCount, setRetryCount] = React.useState(20);
+
+            // Generate template only on first render when jsonData is populated
+            useEffect(() => { retryCount > 0 && get_tsx_template() }, [props, retryCount]);
+
+            const compile_tsx_template = (jsx_text) => {
+                let code = Babel.transform(
+                    `(function(props){ return (${jsx_text}); })`,
+                    { presets: ['react'] }
+                ).code;
+                return new Function('React', `return ${code}`)(React);
+            }
+
+            const test_tsx_template = (jsx_template, _props) => {
+                if (!jsx_template) {
+                    return false;
+                }
+                try {
+                    compile_tsx_template(jsx_template)(_props);
+                    return true;
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            const get_tsx_template = async () => {
+                if (!props || Object.keys(props).length === 0) {
+                    return;
+                }
+                try {
+                    const response = await fetch('/get_jsx_template?regenerate=' + (retryCount > 0), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', },
+                        body: JSON.stringify(props)
+                    });
+                    const jsx_text = await response.text();
+
+                    if (test_tsx_template(jsx_text, props)) {
+                        setTemplate(jsx_text);
+                        setRetryCount(0);
+                        return;
+                    }
+                } catch (error) {}
+
+                setRetryCount(retryCount - 1);
+            };
+
+            if (retryCount > 0 || !props || !test_tsx_template(template, props)) {
+                return <div>Loading...</div>;
+            }
+
+            return React.createElement(compile_tsx_template(template), props);
+        }
+
+
+
+
+        function App() {
+            const [ jsonData, setJsonData ] = useState(null);
+            const [ url, setUrl ] = useState('http://localhost:8006/random_json');
+            const [ kubectlCommand, setKubectlCommand ] = useState('get pods');
+            const [ useKubectl, setUseKubectl ] = useState(false);
+            
+            useEffect(() => {
+                const INTERVAL = 500;
+                let intervalId = null;
+
+                const fetchData = () => {
+                    const fetchUrl = useKubectl 
+                        ? `/kubectl_json?command=${encodeURIComponent(kubectlCommand)}`
+                        : `/proxy?url=${encodeURIComponent(url)}`;
+
+                    fetch(fetchUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            setJsonData(data);
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        })
+                        .catch(error => { 
+                            intervalId = setTimeout(fetchData, INTERVAL);
+                        });
+                };
+
+                fetchData();
+
+                return () => {
+                    if (intervalId) {
+                        clearTimeout(intervalId);
+                    }
+                };
+            }, [url, kubectlCommand, useKubectl]);
+
+            return (
+                <div>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            URL:
+                        </label>
+                        <input 
+                            type="text"
+                            defaultValue={url}
+                            disabled={useKubectl}
+                            onBlur={(e) => setUrl(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '8px',
+                                backgroundColor: '#333',
+                                color: '#f4bf3a',
+                                border: '1px solid #f4bf3a',
+                                borderRadius: '4px',
+                                opacity: useKubectl ? 0.5 : 1
+                            }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{
+                            display: 'block',
+                            marginBottom: '5px',
+                            color: '#f4bf3a'
+                        }}>
+                            kubectl Command:
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <input 
+                                type="text"
+                                defaultValue={kubectlCommand}
+                                disabled={!useKubectl}
+                                onBlur={(e) => setKubectlCommand(e.target.value)}
+                                style={{
+                                    flex: 1,
+                                    padding: '8px',
+                                    backgroundColor: '#333',
+                                    color: '#f4bf3a',
+                                    border: '1px solid #f4bf3a',
+                                    borderRadius: '4px',
+                                    opacity: !useKubectl ? 0.5 : 1
+                                }}
+                            />
+                            <label style={{ color: '#f4bf3a' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useKubectl}
+                                    onChange={(e) => setUseKubectl(e.target.checked)}
+                                /> Use kubectl
+                            </label>
+                        </div>
+                    </div>
+
+                    <LLMTemplate {...jsonData} />
+                </div>
+            );
+        }
+
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

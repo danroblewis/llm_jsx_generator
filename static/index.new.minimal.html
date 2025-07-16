@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCARS Interface</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="/static/babel.min.js"></script>
+    <link rel="stylesheet" href="/static/lcars.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #f4bf3a;
+        }
+        .lcars-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const jsonData = '{"name": "John Doe","age": 35,"city": "New York","contact": {"email": "john.doe@starfleet.org"}}';
+
+
+        const { useState, useEffect, useMemo } = React;
+
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                console.error('Error caught by boundary:', error, errorInfo);
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div style={{
+                            padding: '20px',
+                            backgroundColor: '#990000',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            margin: '10px 0'
+                        }}>
+                            <h2>Something went wrong</h2>
+                            <pre>{this.state.error && this.state.error.toString()}</pre>
+                        </div>
+                    );
+                }
+
+                return this.props.children;
+            }
+        }
+
+
+        function App(props) {
+            const [template, setTemplate] = React.useState(null);
+
+            // Generate template only on first render when jsonData is populated
+            useEffect(() => { get_tsx_template(); }, []);
+
+
+            const compile_tsx_template = (jsx_text) => {
+                let code = Babel.transform(
+                    `(function(props){ return (${jsx_text}); })`,
+                    { presets: ['react'] }
+                ).code;
+                return new Function('React', `return ${code}`)(React);
+            }
+
+            const test_tsx_template = (jsx_template, props) => {
+                if (!jsx_template) {
+                    return false;
+                }
+                try {
+                    let tpl = compile_tsx_template(jsx_template);
+                    tpl(props);  // test the function. if it fails to render, we re-generate a new template
+                    return true;
+                } catch (error) {
+                    console.log('Error:', error);
+                    return false;
+                }
+            }
+
+            const get_tsx_template = async () => {
+                let regenerate = false;
+                for (let i = 0; i < 20; i++) {
+                    try {
+                        let data = JSON.parse(jsonData);
+
+                        // Generate a new template
+                        const response = await fetch('/get_jsx_template?regenerate=' + regenerate, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(data)
+                        });
+                        let jsx_text = await response.text();
+
+                        // Test the template
+                        if (test_tsx_template(jsx_text, JSON.parse(jsonData))) {
+                            return setTemplate(jsx_text);
+                        }
+
+                        regenerate = true;
+                    } catch (error) {
+                        console.log('Error:', error);
+                        regenerate = true;
+                    }
+                }
+            };
+
+
+            let LLMTemplate = () => <div>Loading...</div>
+            if (jsonData && test_tsx_template(template, JSON.parse(jsonData))) {
+                LLMTemplate = compile_tsx_template(template);
+            }
+
+            return <LLMTemplate {...JSON.parse(jsonData)} />;
+        }
+
+
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
